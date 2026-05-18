@@ -1,0 +1,693 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "EarthWonders Ingestion API",
+    "description": "Upload mineral specimens to EarthWonders in batches. Authenticate every request with an `X-API-Key` header.\n\n## Typical flow\n1. `POST /batch` with one or more specimen entries.\n2. Poll `GET /batch/{id}` until the batch status is `Finished`, `Failed`, or `Archived`.\n3. On failure, inspect `GET /batch/{id}/errors` for per-entry processing errors.\n\n## How specimen fields are resolved\nMany fields are optional. When omitted, the ingestion pipeline tries to derive them:\n\n- **Species (required for publish):** Prefer an explicit `species` array of mineral names (matched against EarthWonders species and synonyms). If that is missing or matches nothing, species are inferred from the specimen `name` (e.g. `\"Amethyst Cluster\"` \u2192 Amethyst). Entries with no resolvable species are rejected.\n- **Locality:** Use `location`, or it may be extracted from `description`.\n- **Weight / size:** Use `weight` / `size` (or `width`/`height`/`depth`), or they may be extracted from `description`.\n- **Colors:** Use `colors`, or they may be detected from the first image.\n\n## Media\nAt least one media item is required for a specimen to publish. Prefer `FileLink` with a publicly reachable **HTTPS** image/video URL. YouTube and Vimeo links are also supported via `sourceURLType`.\n\n## Idempotency\nProvide a stable `sourceKey` per specimen within your catalog so later batches update the same record instead of creating duplicates. If omitted, a random key is generated.",
+    "version": "1.0"
+  },
+  "paths": {
+    "/batch": {
+      "post": {
+        "tags": [
+          "Ingestion"
+        ],
+        "summary": "Enqueue a specimen batch",
+        "description": "Accepts a list of specimen entries and schedules them for asynchronous ingestion.\nReturns a `batchId` immediately \u2014 poll `GET /batch/{id}` for progress.\n\nEach entry must eventually resolve to a valid EarthWonders species (via `species` or inference from `name`) and include usable media to publish.\nEntries in one request must have unique `sourceKey` values when keys are provided.",
+        "operationId": "EnqueueIngestionBatch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueIngestionRequest"
+              },
+              "example": {
+                "entries": [
+                  {
+                    "sourceKey": "40bde3ee-7211-4f4f-a022-a8d4dca5daec",
+                    "name": "Schmineral",
+                    "location": "USA",
+                    "description": "This specimen is a world-class, musum-quality stalactic form of the finest gem-quality Amethyst - from the famous regions of Artigas, Uruguay. This specimen is showing huge, stalactic formations, inter-locking in a cluster, and displaying top color of industry standards of grape-jelly. This Amethyst cluster has perfect terminations, no repairs and is in mint condition. \nYou will receive the exact object in these photos. \n\u00a0Weight: 13\u00a0lbs, Dimensions: 11\u00a0x 10\u00a0x 7\u00a0inches",
+                    "weight": "100 g",
+                    "size": "11\u00a0x 10\u00a0x 7\u00a0cm",
+                    "width": null,
+                    "height": null,
+                    "depth": null,
+                    "sku": "B-512",
+                    "forSale": true,
+                    "requestPrice": false,
+                    "soldDate": null,
+                    "price": "$ 40,000.00",
+                    "currency": "USD",
+                    "media": [
+                      {
+                        "url": "https://db7f8ttfcv7qt.cloudfront.net/eaa1fa06-f84f-4641-85d9-225d9e52bcb4_720.jpg",
+                        "sourceURLType": "FileLink",
+                        "embedUrl": null,
+                        "thumbnail": null,
+                        "height": null,
+                        "width": null,
+                        "photographerName": null
+                      }
+                    ],
+                    "colors": [
+                      "grey",
+                      "white",
+                      "black"
+                    ],
+                    "species": [
+                      "Celestite"
+                    ],
+                    "publications": [
+                      {
+                        "publisherName": "Mineralogical Record",
+                        "publicationTitle": "special issue: mineral-collections-in-american-northeast",
+                        "publicationDate": "1990-12-30",
+                        "publicationPage": 71,
+                        "publicationDescription": "Figure 36. Skutterudite, field of view 0.75\u00a0inch (largest crystal is 0.25\u00a0inch), from the Hudson Bay Silver (Rustex) mine, Gowganda, Ontario. David K. Joyce specimen; Ray McDougall photo."
+                      }
+                    ],
+                    "tags": [
+                      "example-tag"
+                    ],
+                    "saleNotes": "Bought using a credit card.",
+                    "knownPreviousOwners": null,
+                    "owner": null
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueIngestionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/batch/{id}": {
+      "get": {
+        "tags": [
+          "Ingestion"
+        ],
+        "summary": "Get batch status",
+        "description": "Returns the processing status of a previously enqueued batch, including per-entry import outcomes and specimen links when available.\nPoll until `status` is `Finished`, `Failed`, or `Archived`.",
+        "operationId": "GetBatchStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBatchStatusResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/batch/{id}/errors": {
+      "get": {
+        "tags": [
+          "Ingestion"
+        ],
+        "summary": "Get batch errors",
+        "description": "Returns processing errors for entries in a batch (for example missing species, media scrape failures, or validation issues).",
+        "operationId": "GetBatchErrors",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBatchErrorsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BatchStatus": {
+        "enum": [
+          "Uploading",
+          "Scheduled",
+          "Processing",
+          "Finished",
+          "Failed",
+          "Archived"
+        ],
+        "type": "string"
+      },
+      "EnqueueIngestionRequest": {
+        "required": [
+          "entries"
+        ],
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IngestionEntry"
+            },
+            "description": "Specimen entries to ingest. Provide a stable `sourceKey` per specimen for recurring syncs.\nKeys must be unique within this request when supplied."
+          }
+        },
+        "additionalProperties": false
+      },
+      "EnqueueIngestionResponse": {
+        "required": [
+          "batchId"
+        ],
+        "type": "object",
+        "properties": {
+          "batchId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Error": {
+        "required": [
+          "happenedAt",
+          "message",
+          "processingStep"
+        ],
+        "type": "object",
+        "properties": {
+          "processingStep": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "sourceKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "happenedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GetBatchErrorsResponse": {
+        "required": [
+          "errors"
+        ],
+        "type": "object",
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "GetBatchStatusResponse": {
+        "required": [
+          "batchId",
+          "importedEntries",
+          "sourceName",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "batchId": {
+            "type": "integer",
+            "description": "Batch ID",
+            "format": "int64"
+          },
+          "sourceName": {
+            "type": "string",
+            "description": "Batch source name"
+          },
+          "currentStep": {
+            "type": "string",
+            "description": "Name of the current processing step",
+            "nullable": true
+          },
+          "stepProgressPercent": {
+            "type": "integer",
+            "description": "Step completion (in %)",
+            "format": "int32",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/BatchStatus"
+          },
+          "importedEntries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportedEntry"
+            },
+            "description": "Detailed information about imported entries"
+          }
+        },
+        "additionalProperties": false,
+        "description": "The current status of an ingestion batch"
+      },
+      "ImportedEntry": {
+        "required": [
+          "details",
+          "sourceKey"
+        ],
+        "type": "object",
+        "properties": {
+          "sourceKey": {
+            "type": "string"
+          },
+          "specimenLink": {
+            "type": "string",
+            "nullable": true
+          },
+          "details": {
+            "$ref": "#/components/schemas/IngestionDetails"
+          }
+        },
+        "additionalProperties": false
+      },
+      "IngestionDetails": {
+        "required": [
+          "listingImportStatus",
+          "specimenImportStatus"
+        ],
+        "type": "object",
+        "properties": {
+          "specimenImportStatus": {
+            "$ref": "#/components/schemas/RecordStatus"
+          },
+          "listingImportStatus": {
+            "$ref": "#/components/schemas/RecordStatus"
+          },
+          "targetSpecimenId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "targetWeight": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "targetWidth": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "targetHeight": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "targetDepth": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "targetPrice": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "ingestionSpecimenParserRevision": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "ingestionWeightSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "ingestionSizeSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "ingestionLocalitySource": {
+            "type": "string",
+            "nullable": true
+          },
+          "ingestionSpeciesSource": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "IngestionEntry": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "sourceKey": {
+            "type": "string",
+            "description": "Stable unique key for this specimen within your catalog (source).\nUsed to update or replace the same specimen on later batches. If omitted, a random key is generated (not recommended for recurring syncs).",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the specimen (required).\nAlso used as a fallback source for species matching when `species` is omitted or does not match any known mineral\n(for example `\"Amethyst Cluster\"` can resolve to Amethyst)."
+          },
+          "location": {
+            "type": "string",
+            "description": "Locality / origin text (for example `\"Artigas, Uruguay\"`).\nIf omitted, locality may be extracted from `description`.",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "description": "Free-form, multiline specimen description.\nWhen structured fields are missing, weight, size, and locality may be extracted from this text.",
+            "nullable": true
+          },
+          "weight": {
+            "type": "string",
+            "description": "Specimen weight as `\"[value] [unit]\"` (for example `\"420 g\"`, `\"1.5 kg\"`, `\"2 lbs\"`).\nIf omitted, weight may be extracted from `description`.",
+            "nullable": true
+          },
+          "size": {
+            "type": "string",
+            "description": "Specimen size as `\"[width] x [height] x [depth] [unit]\"` (for example `\"11 x 10 x 7 cm\"`).\nUsed when `width`, `height`, and `depth` are not provided.\nIf none of the dimension fields are present, size may be extracted from `description`.",
+            "nullable": true
+          },
+          "width": {
+            "type": "number",
+            "description": "Specimen width in meters. Prefer this (with height/depth) over `size` when you have numeric dimensions.",
+            "format": "double",
+            "nullable": true
+          },
+          "height": {
+            "type": "number",
+            "description": "Specimen height in meters.",
+            "format": "double",
+            "nullable": true
+          },
+          "depth": {
+            "type": "number",
+            "description": "Specimen depth in meters.",
+            "format": "double",
+            "nullable": true
+          },
+          "sku": {
+            "type": "string",
+            "description": "Optional internal SKU or dealer reference string.",
+            "nullable": true
+          },
+          "forSale": {
+            "type": "boolean",
+            "description": "Whether the specimen is currently offered for sale.",
+            "nullable": true
+          },
+          "requestPrice": {
+            "type": "boolean",
+            "description": "When true, the listing price is available on request rather than shown as a fixed amount.",
+            "nullable": true
+          },
+          "soldDate": {
+            "type": "string",
+            "description": "Date the specimen was sold, as `yyyy-MM-dd`.",
+            "format": "date",
+            "nullable": true
+          },
+          "price": {
+            "type": "string",
+            "description": "Listing price as a decimal string. Currency symbols and thousand separators are tolerated\n(for example `\"$ 40,000.00\"`, `\"250.00\"`).",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO currency code for the listing price (for example `USD`, `EUR`).",
+            "nullable": true
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaDefinition"
+            },
+            "description": "Media attached to the specimen. At least one publishable media item is required for the specimen to go live.\nPrefer HTTPS `FileLink` URLs that are publicly reachable without authentication.",
+            "nullable": true
+          },
+          "colors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional color labels for the specimen. If omitted, colors may be detected from the first image.\nValid values: Black, Blue, Brown, Copper, Cream, Gold, Green, Grey, Multicolored, Orange, Pink, Purple, Red, Silver, White, Yellow, Colorless.",
+            "nullable": true
+          },
+          "species": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Preferred way to set species: mineral names matched against the EarthWonders species catalog (including synonyms),\ncase-insensitive, with simple plural forms accepted (for example `\"Amethyst\"`, `\"quartzes\"`).\nExtra surrounding text in a value is allowed as long as the species name appears as a word.\nIf this field is omitted or no values match, species are inferred from `name` instead.\nSpecimens that still have no valid species after both steps are rejected and will not publish.",
+            "nullable": true
+          },
+          "publications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicationEntry"
+            },
+            "description": "Optional publication citations associated with the specimen.",
+            "nullable": true
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional free-form tags applied to the specimen.",
+            "nullable": true
+          },
+          "saleNotes": {
+            "type": "string",
+            "description": "Optional notes about the sale (buyer context, payment, etc.).",
+            "nullable": true
+          },
+          "knownPreviousOwners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional names of known previous owners (provenance).",
+            "nullable": true
+          },
+          "owner": {
+            "type": "string",
+            "description": "Optional override for the specimen owner display name.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A single specimen to ingest.\nOnly `name` is required at submit time; other fields are enriched by the pipeline when omitted.\nTo publish successfully the entry must resolve to at least one valid EarthWonders species and include usable media."
+      },
+      "MediaDefinition": {
+        "required": [
+          "sourceURLType",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The public source URL from which the media can be accessed.\nFor `FileLink`, must be an absolute HTTPS URL reachable from the public internet (no private/internal hosts)."
+          },
+          "sourceURLType": {
+            "$ref": "#/components/schemas/SourceType"
+          },
+          "embedUrl": {
+            "type": "string",
+            "description": "Link for embedding the media inside an html page.\nNeeds to be filled for Vimeo source types.",
+            "nullable": true
+          },
+          "thumbnail": {
+            "type": "string",
+            "description": "Thumbnail link for video files.",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "description": "Media height.",
+            "format": "int32",
+            "nullable": true
+          },
+          "width": {
+            "type": "integer",
+            "description": "Media width.",
+            "format": "int32",
+            "nullable": true
+          },
+          "photographerName": {
+            "type": "string",
+            "description": "Name of the photographer that created this piece of media.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "PublicationEntry": {
+        "type": "object",
+        "properties": {
+          "publisherName": {
+            "type": "string",
+            "description": "The name of the entity releasing the publications. Ex. \"Mineralogical Record\"",
+            "nullable": true
+          },
+          "publicationTitle": {
+            "type": "string",
+            "description": "The title of the publication in which the specimen is mentioned.",
+            "nullable": true
+          },
+          "publicationDate": {
+            "type": "string",
+            "description": "Date the publication was released. String formatted as 'yyyy-MM-dd'.",
+            "format": "date",
+            "nullable": true
+          },
+          "publicationPage": {
+            "type": "integer",
+            "description": "Number of the page on which the specimen is mentioned in the publication.",
+            "format": "int32",
+            "nullable": true
+          },
+          "publicationDescription": {
+            "type": "string",
+            "description": "Description of the specimen in the publication.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "RecordStatus": {
+        "enum": [
+          "Unprocessed",
+          "Processed",
+          "Rejected",
+          "Publishable",
+          "Published",
+          "Deleted"
+        ],
+        "type": "string"
+      },
+      "SourceType": {
+        "enum": [
+          "FileLink",
+          "YouTube",
+          "Vimeo"
+        ],
+        "type": "string",
+        "description": "FileLink = The source is a direct file link to an media file (.jpg, .mp4,...);\n\nYouTube = The source is an YouTube link. The video will be downloaded with YouTube specific handlers;\n\nVimeo = The source is an Vimeo link. The file will not be downloaded, instead only links will be ingested;"
+      },
+      "ValidationProblemDetails": {
+        "required": [
+          "errors"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "additionalProperties": {}
+      }
+    },
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "description": "API key authentication. Contact EarthWonders to obtain an API key.",
+        "name": "X-API-Key",
+        "in": "header"
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKey": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Ingestion"
+    }
+  ]
+}

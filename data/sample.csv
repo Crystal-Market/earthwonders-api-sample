@@ -1,0 +1,4 @@
+sourceKey,name,description,location,species,colors,weight,size,sku,price,currency,forSale,requestPrice,tags,mediaUrls
+sample-001,Amethyst Cluster,"Stalactitic amethyst cluster with deep purple terminations.",Artigas Uruguay,Amethyst,Purple|White,420 g,11 x 10 x 7 cm,AMT-001,250.00,USD,true,false,featured|cluster,https://upload.wikimedia.org/wikipedia/commons/0/03/Amethyst._Magaliesburg%2C_South_Africa.jpg
+sample-002,Pyrite Cube,"Sharp cubic pyrite crystals from the Victoria mine.",Navajun La Rioja Spain,Pyrite,Gold,180 g,5 x 5 x 5 cm,PYR-001,75.00,EUR,true,false,cube,https://upload.wikimedia.org/wikipedia/commons/9/95/2780M-pyrite1.jpg
+sample-003,Quartz Crystal,"Clear quartz point with rainbow inclusions.",Minas Gerais Brazil,Quartz,Colorless,95 g,8 x 3 x 3 cm,QTZ-001,,USD,true,true,point|clear,https://upload.wikimedia.org/wikipedia/commons/0/01/Quartz%2C_Tibet.jpg

@@ -1,0 +1,30 @@
+{
+  "name": "earthwonders-api-sample",
+  "version": "0.1.0",
+  "description": "Minimal Node.js sample that uploads minerals to the EarthWonders API.",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "earthwonders-upload": "./dist/upload.js"
+  },
+  "scripts": {
+    "upload": "tsx src/upload.ts",
+    "build": "tsc",
+    "start": "node dist/upload.js",
+    "typecheck": "tsc --noEmit",
+    "generate-client": "swagger-typescript-api generate -p ./schema/api.schema.json --api-class-name=EarthwondersAPI -o ./src -n api.ts --unwrap-response-data -r --generate-union-enums"
+  },
+  "dependencies": {
+    "csv-parse": "^5.5.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "swagger-typescript-api": "^13.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}
