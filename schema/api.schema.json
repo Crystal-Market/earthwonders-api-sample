@@ -71,7 +71,9 @@
                     ],
                     "saleNotes": "Bought using a credit card.",
                     "knownPreviousOwners": null,
-                    "owner": null
+                    "owner": null,
+                    "status": null,
+                    "isPrivate": null
                   }
                 ]
               }
@@ -278,7 +280,7 @@
           },
           "currentStep": {
             "type": "string",
-            "description": "Name of the current processing step",
+            "description": "Names of the steps running in the current phase, comma separated",
             "nullable": true
           },
           "stepProgressPercent": {
@@ -324,7 +326,9 @@
       "IngestionDetails": {
         "required": [
           "listingImportStatus",
-          "specimenImportStatus"
+          "specimenImportStatus",
+          "targetIsPrivate",
+          "targetStatus"
         ],
         "type": "object",
         "properties": {
@@ -384,6 +388,12 @@
           "ingestionSpeciesSource": {
             "type": "string",
             "nullable": true
+          },
+          "targetStatus": {
+            "$ref": "#/components/schemas/SpecimenTargetStatus"
+          },
+          "targetIsPrivate": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -529,6 +539,14 @@
             "type": "string",
             "description": "Optional override for the specimen owner display name.",
             "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/SpecimenVisibilityStatus"
+          },
+          "isPrivate": {
+            "type": "boolean",
+            "description": "When true, the specimen (and its listing) is hidden from public search but still visible to its owner.\nOmit for public (`false`).",
+            "nullable": true
           }
         },
         "additionalProperties": false,
@@ -630,6 +648,23 @@
         ],
         "type": "string",
         "description": "FileLink = The source is a direct file link to an media file (.jpg, .mp4,...);\n\nYouTube = The source is an YouTube link. The video will be downloaded with YouTube specific handlers;\n\nVimeo = The source is an Vimeo link. The file will not be downloaded, instead only links will be ingested;"
+      },
+      "SpecimenTargetStatus": {
+        "enum": [
+          "Published",
+          "Draft",
+          "Removed"
+        ],
+        "type": "string"
+      },
+      "SpecimenVisibilityStatus": {
+        "enum": [
+          "Draft",
+          "Published",
+          "Removed"
+        ],
+        "type": "string",
+        "description": "Public visibility of an ingested specimen.\nSerialized as a string (`Draft`, `Published`, `Removed`)."
       },
       "ValidationProblemDetails": {
         "required": [

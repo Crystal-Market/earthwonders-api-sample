@@ -11,6 +11,14 @@
  */
 
 /**
+ * Public visibility of an ingested specimen.
+ * Serialized as a string (`Draft`, `Published`, `Removed`).
+ */
+export type SpecimenVisibilityStatus = "Draft" | "Published" | "Removed";
+
+export type SpecimenTargetStatus = "Published" | "Draft" | "Removed";
+
+/**
  * FileLink = The source is a direct file link to an media file (.jpg, .mp4,...);
  *
  * YouTube = The source is an YouTube link. The video will be downloaded with YouTube specific handlers;
@@ -69,7 +77,7 @@ export interface GetBatchStatusResponse {
   batchId: number;
   /** Batch source name */
   sourceName: string;
-  /** Name of the current processing step */
+  /** Names of the steps running in the current phase, comma separated */
   currentStep?: string | null;
   /**
    * Step completion (in %)
@@ -108,6 +116,8 @@ export interface IngestionDetails {
   ingestionSizeSource?: string | null;
   ingestionLocalitySource?: string | null;
   ingestionSpeciesSource?: string | null;
+  targetStatus: SpecimenTargetStatus;
+  targetIsPrivate: boolean;
 }
 
 /**
@@ -209,6 +219,16 @@ export interface IngestionEntry {
   knownPreviousOwners?: string[] | null;
   /** Optional override for the specimen owner display name. */
   owner?: string | null;
+  /**
+   * Public visibility of an ingested specimen.
+   * Serialized as a string (`Draft`, `Published`, `Removed`).
+   */
+  status?: SpecimenVisibilityStatus;
+  /**
+   * When true, the specimen (and its listing) is hidden from public search but still visible to its owner.
+   * Omit for public (`false`).
+   */
+  isPrivate?: boolean | null;
 }
 
 export interface MediaDefinition {
