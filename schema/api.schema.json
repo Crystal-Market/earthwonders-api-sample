@@ -2,7 +2,7 @@
   "openapi": "3.0.4",
   "info": {
     "title": "EarthWonders Ingestion API",
-    "description": "Upload mineral specimens to EarthWonders in batches. Authenticate every request with an `X-API-Key` header.\n\n## Typical flow\n1. `POST /batch` with one or more specimen entries.\n2. Poll `GET /batch/{id}` until the batch status is `Finished`, `Failed`, or `Archived`.\n3. On failure, inspect `GET /batch/{id}/errors` for per-entry processing errors.\n\n## How specimen fields are resolved\nMany fields are optional. When omitted, the ingestion pipeline tries to derive them:\n\n- **Species (required for publish):** Prefer an explicit `species` array of mineral names (matched against EarthWonders species and synonyms). If that is missing or matches nothing, species are inferred from the specimen `name` (e.g. `\"Amethyst Cluster\"` \u2192 Amethyst). Entries with no resolvable species are rejected.\n- **Locality:** Use `location`, or it may be extracted from `description`.\n- **Weight / size:** Use `weight` / `size` (or `width`/`height`/`depth`), or they may be extracted from `description`.\n- **Colors:** Use `colors`, or they may be detected from the first image.\n\n## Media\nAt least one media item is required for a specimen to publish. Prefer `FileLink` with a publicly reachable **HTTPS** image/video URL. YouTube and Vimeo links are also supported via `sourceURLType`.\n\n## Idempotency\nProvide a stable `sourceKey` per specimen within your catalog so later batches update the same record instead of creating duplicates. If omitted, a random key is generated.",
+    "description": "Upload mineral specimens to EarthWonders in batches. Authenticate every request with an `X-API-Key` header.\n\n## Typical flow\n1. `POST /batch` with one or more specimen entries.\n2. Poll `GET /batch/{id}` until the batch status is `Finished`, `Failed`, or `Archived`.\n3. On failure, inspect `GET /batch/{id}/errors` for per-entry processing errors.\n\n## How specimen fields are resolved\nMany fields are optional. When omitted, the ingestion pipeline tries to derive them:\n\n- **Species (required for publish):** Prefer an explicit `species` array of mineral names (matched against EarthWonders species and synonyms). If that is missing or matches nothing, species are inferred from the specimen `name` (e.g. `\"Amethyst Cluster\"` \u2192 Amethyst). Entries with no resolvable species are rejected.\n- **Locality:** Use `location`, or it may be extracted from `description`.\n- **Weight / size:** Use `weight` / `size` (or `width`/`height`/`depth`), or they may be extracted from `description`.\n- **Colors:** Use `colors`, or they may be detected from the first image.\n\n## Media\nAt least one media item is required for a specimen to publish. Prefer `FileLink` with a publicly reachable **HTTPS** image/video URL. YouTube and Vimeo links are also supported via `sourceURLType`.\n\n## Visibility\n- **status:** `Published` when omitted, or `Draft` / `Removed`. Draft specimens are hidden from public search but still visible to their owner. `Removed` retires the specimen and its listing without destroying them; a later `Published` restores both. A specimen its owner deleted in the marketplace stays deleted \u2014 their removal counts as a manual edit, so no feed value republishes it.\n- **isPrivate:** `false` when omitted. A private specimen (and its listing) is hidden from public search but still visible to its owner.\n\n## Idempotency\nProvide a stable `sourceKey` per specimen within your catalog so later batches update the same record instead of creating duplicates. If omitted, a random key is generated.",
     "version": "1.0"
   },
   "paths": {
@@ -33,6 +33,7 @@
                     "height": null,
                     "depth": null,
                     "sku": "B-512",
+                    "availability": null,
                     "forSale": true,
                     "requestPrice": false,
                     "soldDate": null,
@@ -176,6 +177,99 @@
           }
         }
       }
+    },
+    "/species/sales/{speciesId}": {
+      "get": {
+        "tags": [
+          "Ingestion"
+        ],
+        "operationId": "GetSpeciesSalesDetails",
+        "parameters": [
+          {
+            "name": "speciesId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSpeciesSalesDetailsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/species/sales": {
+      "get": {
+        "tags": [
+          "Ingestion"
+        ],
+        "operationId": "GetTopSpeciesSales",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetTopSpeciesSalesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -302,6 +396,36 @@
         },
         "additionalProperties": false,
         "description": "The current status of an ingestion batch"
+      },
+      "GetSpeciesSalesDetailsResponse": {
+        "required": [
+          "soldSpecimens"
+        ],
+        "type": "object",
+        "properties": {
+          "soldSpecimens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoldSpecimen"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "GetTopSpeciesSalesResponse": {
+        "required": [
+          "speciesStats"
+        ],
+        "type": "object",
+        "properties": {
+          "speciesStats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpeciesStat"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "ImportedEntry": {
         "required": [
@@ -456,9 +580,12 @@
             "description": "Optional internal SKU or dealer reference string.",
             "nullable": true
           },
+          "availability": {
+            "$ref": "#/components/schemas/ListingAvailability"
+          },
           "forSale": {
             "type": "boolean",
-            "description": "Whether the specimen is currently offered for sale.",
+            "description": "Legacy. Whether the specimen is currently offered for sale. Prefer `availability`.",
             "nullable": true
           },
           "requestPrice": {
@@ -468,7 +595,7 @@
           },
           "soldDate": {
             "type": "string",
-            "description": "Date the specimen was sold, as `yyyy-MM-dd`.",
+            "description": "Date the specimen was sold, as `yyyy-MM-dd`. Required with `availability: sold`.\nLegacy: without `availability`, `forSale: false` together with this date records a sale.",
             "format": "date",
             "nullable": true
           },
@@ -551,6 +678,16 @@
         },
         "additionalProperties": false,
         "description": "A single specimen to ingest.\nOnly `name` is required at submit time; other fields are enriched by the pipeline when omitted.\nTo publish successfully the entry must resolve to at least one valid EarthWonders species and include usable media."
+      },
+      "ListingAvailability": {
+        "enum": [
+          "ForSale",
+          "Reserved",
+          "NotForSale",
+          "Sold"
+        ],
+        "type": "string",
+        "description": "Sale state of an ingested specimen's listing; the preferred way to say whether a specimen can be bought.\nSerialized as a string (`ForSale`, `Reserved`, `NotForSale`, `Sold`; case-insensitive).\n`ForSale` publishes a priced listing. `Reserved` keeps the listing visible with its price but not purchasable\n(shown as Reserved; no offers). `NotForSale` withdraws the listing while the specimen stays visible.\n`Sold` records a sale and requires `soldDate`; it is the only value that creates a sales-history entry.\nWhen present, the legacy `forSale` field and the `soldDate`-based sale inference are ignored."
       },
       "MediaDefinition": {
         "required": [
@@ -640,6 +777,42 @@
         ],
         "type": "string"
       },
+      "SoldSpecimen": {
+        "required": [
+          "soldDate",
+          "soldPrice",
+          "speciesIds",
+          "specimenId"
+        ],
+        "type": "object",
+        "properties": {
+          "soldDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "specimenId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "localityId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "soldPrice": {
+            "type": "number",
+            "format": "double"
+          },
+          "speciesIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "SourceType": {
         "enum": [
           "FileLink",
@@ -648,6 +821,24 @@
         ],
         "type": "string",
         "description": "FileLink = The source is a direct file link to an media file (.jpg, .mp4,...);\n\nYouTube = The source is an YouTube link. The video will be downloaded with YouTube specific handlers;\n\nVimeo = The source is an Vimeo link. The file will not be downloaded, instead only links will be ingested;"
+      },
+      "SpeciesStat": {
+        "required": [
+          "speciesId",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "number",
+            "format": "double"
+          },
+          "speciesId": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
       },
       "SpecimenTargetStatus": {
         "enum": [

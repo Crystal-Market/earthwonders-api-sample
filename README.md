@@ -20,7 +20,7 @@ cp .env.example .env
 npm run upload
 ```
 
-By default this uploads the three rows in [`data/sample.csv`](data/sample.csv). To upload your own file:
+By default this uploads the four rows in [`data/sample.csv`](data/sample.csv) — one per sale state (`ForSale`, `Reserved`, price on request, `Sold`). To upload your own file:
 
 ```bash
 npm run upload -- path/to/your.csv
@@ -50,19 +50,74 @@ One row per specimen. All columns are optional except **`name`**. List-valued co
 | `sku`          | string  | Internal SKU / reference.                                                                            |
 | `price`        | string  | Decimal value. Symbols (`$`, `€`, `,`) are tolerated.                                                |
 | `currency`     | string  | ISO code (`USD`, `EUR`, ...).                                                                        |
-| `forSale`      | boolean | `true` / `false`.                                                                                    |
+| `availability` | string  | Sale state: `ForSale`, `Reserved`, `NotForSale`, or `Sold` (case-insensitive). See [Availability](#availability). |
+| `soldDate`     | string  | `yyyy-MM-dd`. **Required when `availability` is `Sold`.**                                            |
 | `requestPrice` | boolean | `true` if price is on request.                                                                       |
+| `forSale`      | boolean | Legacy `true` / `false`. Ignored when `availability` is set; prefer `availability`.                  |
 | `tags`         | list    | Free-form tags.                                                                                      |
 | `mediaUrls`    | list    | Public image URLs. Each becomes a `FileLink` media entry.                                            |
 
 For the full schema (publications, video media, previous owners, etc.) see [`schema/api.schema.json`](schema/api.schema.json) and the generated [`src/api.ts`](src/api.ts).
+
+## Availability
+
+`availability` is the preferred way to state whether a specimen can be bought. It is an optional string enum on each `POST /batch` entry (`IngestionEntry.availability`, type `ListingAvailability` in `src/api.ts`):
+
+| `availability` | Requires                       | Result on EarthWonders                                                                              |
+| -------------- | ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `ForSale`      | a positive `price` (or `requestPrice: true`) | Priced, buyable listing.                                                                  |
+| `Reserved`     | a `price`                      | Listing stays visible with its price but nobody can buy or make an offer — until set back to `ForSale`. |
+| `NotForSale`   | —                              | Listing withdrawn; the specimen stays in the gallery. Never recorded as a sale, even if `soldDate` is sent. |
+| `Sold`         | `soldDate` (`yyyy-MM-dd`)      | Sale recorded. The only value that creates a sales-history entry.                                   |
+
+The same entries as the CSV, written as JSON (this is what `src/csv.ts` produces):
+
+```json
+{
+  "entries": [
+    {
+      "sourceKey": "sample-001",
+      "name": "Amethyst Cluster",
+      "price": "250.00",
+      "currency": "USD",
+      "availability": "ForSale",
+      "media": [{ "url": "https://example.com/amethyst.jpg", "sourceURLType": "FileLink" }]
+    },
+    {
+      "sourceKey": "sample-002",
+      "name": "Pyrite Cube",
+      "price": "75.00",
+      "currency": "EUR",
+      "availability": "Reserved",
+      "media": [{ "url": "https://example.com/pyrite.jpg", "sourceURLType": "FileLink" }]
+    },
+    {
+      "sourceKey": "sample-004",
+      "name": "Fluorite on Matrix",
+      "price": "180.00",
+      "currency": "GBP",
+      "availability": "Sold",
+      "soldDate": "2024-03-15",
+      "media": [{ "url": "https://example.com/fluorite.jpg", "sourceURLType": "FileLink" }]
+    }
+  ]
+}
+```
+
+Sending `"availability": "Sold"` without a `soldDate` rejects the whole batch with HTTP 400:
+
+```json
+{ "errors": { "Entries[2].SoldDate": ["soldDate is required when availability is sold."] } }
+```
+
+**Existing integrations:** when `availability` is omitted, the legacy `forSale` / `soldDate` fields behave exactly as before (`forSale: false` together with a `soldDate` still records a sale). New integrations should send `availability`.
 
 ## Project layout
 
 ```
 earthwonders-api-sample/
 ├── data/
-│   └── sample.csv          # 3-row example dataset
+│   └── sample.csv          # 4-row example dataset (one per availability state)
 ├── schema/
 │   └── api.schema.json     # Snapshot of the EarthWonders OpenAPI spec
 ├── src/

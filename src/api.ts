@@ -35,6 +35,20 @@ export type RecordStatus =
   | "Published"
   | "Deleted";
 
+/**
+ * Sale state of an ingested specimen's listing; the preferred way to say whether a specimen can be bought.
+ * Serialized as a string (`ForSale`, `Reserved`, `NotForSale`, `Sold`; case-insensitive).
+ * `ForSale` publishes a priced listing. `Reserved` keeps the listing visible with its price but not purchasable
+ * (shown as Reserved; no offers). `NotForSale` withdraws the listing while the specimen stays visible.
+ * `Sold` records a sale and requires `soldDate`; it is the only value that creates a sales-history entry.
+ * When present, the legacy `forSale` field and the `soldDate`-based sale inference are ignored.
+ */
+export type ListingAvailability =
+  | "ForSale"
+  | "Reserved"
+  | "NotForSale"
+  | "Sold";
+
 export type BatchStatus =
   | "Uploading"
   | "Scheduled"
@@ -87,6 +101,14 @@ export interface GetBatchStatusResponse {
   status: BatchStatus;
   /** Detailed information about imported entries */
   importedEntries: ImportedEntry[];
+}
+
+export interface GetSpeciesSalesDetailsResponse {
+  soldSpecimens: SoldSpecimen[];
+}
+
+export interface GetTopSpeciesSalesResponse {
+  speciesStats: SpeciesStat[];
 }
 
 export interface ImportedEntry {
@@ -175,12 +197,22 @@ export interface IngestionEntry {
   depth?: number | null;
   /** Optional internal SKU or dealer reference string. */
   sku?: string | null;
-  /** Whether the specimen is currently offered for sale. */
+  /**
+   * Sale state of an ingested specimen's listing; the preferred way to say whether a specimen can be bought.
+   * Serialized as a string (`ForSale`, `Reserved`, `NotForSale`, `Sold`; case-insensitive).
+   * `ForSale` publishes a priced listing. `Reserved` keeps the listing visible with its price but not purchasable
+   * (shown as Reserved; no offers). `NotForSale` withdraws the listing while the specimen stays visible.
+   * `Sold` records a sale and requires `soldDate`; it is the only value that creates a sales-history entry.
+   * When present, the legacy `forSale` field and the `soldDate`-based sale inference are ignored.
+   */
+  availability?: ListingAvailability;
+  /** Legacy. Whether the specimen is currently offered for sale. Prefer `availability`. */
   forSale?: boolean | null;
   /** When true, the listing price is available on request rather than shown as a fixed amount. */
   requestPrice?: boolean | null;
   /**
-   * Date the specimen was sold, as `yyyy-MM-dd`.
+   * Date the specimen was sold, as `yyyy-MM-dd`. Required with `availability: sold`.
+   * Legacy: without `availability`, `forSale: false` together with this date records a sale.
    * @format date
    */
   soldDate?: string | null;
@@ -283,6 +315,25 @@ export interface PublicationEntry {
   publicationPage?: number | null;
   /** Description of the specimen in the publication. */
   publicationDescription?: string | null;
+}
+
+export interface SoldSpecimen {
+  /** @format date */
+  soldDate: string;
+  /** @format int32 */
+  specimenId: number;
+  /** @format int32 */
+  localityId?: number | null;
+  /** @format double */
+  soldPrice: number;
+  speciesIds: number[];
+}
+
+export interface SpeciesStat {
+  /** @format double */
+  value: number;
+  /** @format int32 */
+  speciesId: number;
 }
 
 export interface ValidationProblemDetails {
@@ -573,6 +624,10 @@ export class HttpClient<SecurityDataType = unknown> {
  * ## Media
  * At least one media item is required for a specimen to publish. Prefer `FileLink` with a publicly reachable **HTTPS** image/video URL. YouTube and Vimeo links are also supported via `sourceURLType`.
  *
+ * ## Visibility
+ * - **status:** `Published` when omitted, or `Draft` / `Removed`. Draft specimens are hidden from public search but still visible to their owner. `Removed` retires the specimen and its listing without destroying them; a later `Published` restores both. A specimen its owner deleted in the marketplace stays deleted — their removal counts as a manual edit, so no feed value republishes it.
+ * - **isPrivate:** `false` when omitted. A private specimen (and its listing) is hidden from public search but still visible to its owner.
+ *
  * ## Idempotency
  * Provide a stable `sourceKey` per specimen within your catalog so later batches update the same record instead of creating duplicates. If omitted, a random key is generated.
  */
@@ -640,6 +695,64 @@ export class EarthwondersAPI<
       this.request<GetBatchErrorsResponse, void>({
         path: `/batch/${id}/errors`,
         method: "GET",
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+  };
+  species = {
+    /**
+     * No description
+     *
+     * @tags Ingestion
+     * @name GetSpeciesSalesDetails
+     * @request GET:/species/sales/{speciesId}
+     * @secure
+     * @response `200` `GetSpeciesSalesDetailsResponse` OK
+     */
+    getSpeciesSalesDetails: (
+      speciesId: number,
+      query?: {
+        /** @format date */
+        from?: string;
+        /** @format date */
+        to?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<GetSpeciesSalesDetailsResponse, any>({
+        path: `/species/sales/${speciesId}`,
+        method: "GET",
+        query: query,
+        secure: true,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Ingestion
+     * @name GetTopSpeciesSales
+     * @request GET:/species/sales
+     * @secure
+     * @response `200` `GetTopSpeciesSalesResponse` OK
+     */
+    getTopSpeciesSales: (
+      query?: {
+        /** @format date */
+        from?: string;
+        /** @format date */
+        to?: string;
+        /** @format int32 */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<GetTopSpeciesSalesResponse, any>({
+        path: `/species/sales`,
+        method: "GET",
+        query: query,
         secure: true,
         format: "json",
         ...params,
