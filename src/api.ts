@@ -103,14 +103,6 @@ export interface GetBatchStatusResponse {
   importedEntries: ImportedEntry[];
 }
 
-export interface GetSpeciesSalesDetailsResponse {
-  soldSpecimens: SoldSpecimen[];
-}
-
-export interface GetTopSpeciesSalesResponse {
-  speciesStats: SpeciesStat[];
-}
-
 export interface ImportedEntry {
   sourceKey: string;
   specimenLink?: string | null;
@@ -315,25 +307,6 @@ export interface PublicationEntry {
   publicationPage?: number | null;
   /** Description of the specimen in the publication. */
   publicationDescription?: string | null;
-}
-
-export interface SoldSpecimen {
-  /** @format date */
-  soldDate: string;
-  /** @format int32 */
-  specimenId: number;
-  /** @format int32 */
-  localityId?: number | null;
-  /** @format double */
-  soldPrice: number;
-  speciesIds: number[];
-}
-
-export interface SpeciesStat {
-  /** @format double */
-  value: number;
-  /** @format int32 */
-  speciesId: number;
 }
 
 export interface ValidationProblemDetails {
@@ -695,64 +668,6 @@ export class EarthwondersAPI<
       this.request<GetBatchErrorsResponse, void>({
         path: `/batch/${id}/errors`,
         method: "GET",
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-  };
-  species = {
-    /**
-     * No description
-     *
-     * @tags Ingestion
-     * @name GetSpeciesSalesDetails
-     * @request GET:/species/sales/{speciesId}
-     * @secure
-     * @response `200` `GetSpeciesSalesDetailsResponse` OK
-     */
-    getSpeciesSalesDetails: (
-      speciesId: number,
-      query?: {
-        /** @format date */
-        from?: string;
-        /** @format date */
-        to?: string;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<GetSpeciesSalesDetailsResponse, any>({
-        path: `/species/sales/${speciesId}`,
-        method: "GET",
-        query: query,
-        secure: true,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags Ingestion
-     * @name GetTopSpeciesSales
-     * @request GET:/species/sales
-     * @secure
-     * @response `200` `GetTopSpeciesSalesResponse` OK
-     */
-    getTopSpeciesSales: (
-      query?: {
-        /** @format date */
-        from?: string;
-        /** @format date */
-        to?: string;
-        /** @format int32 */
-        limit?: number;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<GetTopSpeciesSalesResponse, any>({
-        path: `/species/sales`,
-        method: "GET",
-        query: query,
         secure: true,
         format: "json",
         ...params,

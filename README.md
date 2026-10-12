@@ -146,7 +146,7 @@ new EarthwondersAPI({
 
 ### Regenerating the client
 
-Replace `schema/api.schema.json` with the latest version from EarthWonders, then:
+Replace `schema/api.schema.json` with the latest version from EarthWonders (the snapshot here is trimmed to the `/batch` endpoints this sample uses), then:
 
 ```bash
 npm run generate-client
